@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Simulasi Sistem Sosial — BM</title>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{ --bg:#071428; --card:#0b1b2a; --muted:#9fb6c6; --accent:#4fd1c5; }
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, Roboto, 'Segoe UI', Arial;color:#e6f6ff;background:linear-gradient(180deg,#071428 0%, #07192b 100%);}
+.app{padding:18px;display:flex;flex-direction:column;gap:12px}
+.header{display:flex;align-items:center;gap:12px}
+.title{font-size:20px;font-weight:700}
+.subtitle{color:var(--muted);font-size:13px}
+.layout{display:grid;grid-template-columns:1fr 380px;gap:14px;align-items:start}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06));border:1px solid rgba(255,255,255,0.04);padding:12px;border-radius:10px}
+#simWrap{height:520px;border-radius:8px;overflow:hidden;position:relative;background:linear-gradient(180deg, rgba(255,255,255,0.012), rgba(0,0,0,0.06));}
+canvas#simCanvas{display:block;width:100%;height:100%}
+.controls{display:flex;gap:8px;align-items:center;margin-top:10px}
+button{background:var(--accent);color:#012225;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(79,209,197,0.12)}
+.panel{padding:10px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.03);}
+.row{display:flex;justify-content:space-between;align-items:center}
+.muted{color:var(--muted);font-size:13px}
+.controls-right{margin-left:auto}
+.small{font-size:13px;color:var(--muted)}
+.legend{display:flex;gap:8px;flex-wrap:wrap}
+.legend .item{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.swatch{width:12px;height:12px;border-radius:3px}
+.side{display:flex;flex-direction:column;gap:12px}
+.chart-box{height:170px}
+.controls-inputs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+.input{width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:#dff5ff}
+.footer{color:var(--muted);text-align:center;margin-top:10px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="title">Simulasi Sistem Sosial (Fixed)</div>
+      <div class="subtitle">Peran: Keluarga, Sekolah, Masyarakat — kegiatan spesifik diadaptasi</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="card">
+      <div id="simWrap"><canvas id="simCanvas"></canvas></div>
+      <div class="controls">
+        <button id="startBtn">Mulai</button>
+        <button id="pauseBtn" class="ghost">Pause</button>
+        <button id="resetBtn" class="ghost">Reset</button>
+        <div class="controls-right small">Tick: <span id="tick">0</span></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+        <div style="flex:1" class="panel">
+          <div class="small">Pengaruh global (pengali)</div>
+          <input id="influence" type="range" min="0" max="2" step="0.05" value="1" style="width:100%">
+          <div class="row"><div class="muted">Nilai</div><div id="influenceVal">1.00x</div></div>
+        </div>
+        <div style="width:180px" class="panel">
+          <div class="small">Interval interaksi (ms)</div>
+          <input id="intervalRange" type="range" min="200" max="1500" step="50" value="800" style="width:100%">
+          <div class="row"><div class="muted">Interval</div><div id="intervalVal">800ms</div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <div style="flex:1" class="panel">
+          <div class="small">Log aktivitas (terbaru)</div>
+          <div id="log" style="height:110px;overflow:auto;background:transparent;padding:6px;margin-top:6px;border-radius:6px"></div>
+        </div>
+        <div style="width:180px" class="panel">
+          <div class="small">Kontrol Agent</div>
+          <div style="margin-top:6px" class="small">Jumlah per komponen</div>
+          <div class="controls-inputs" style="margin-top:8px">
+            <input id="cntKeluarga" class="input" type="number" min="1" max="120" value="15">
+            <input id="cntSekolah" class="input" type="number" min="1" max="120" value="18">
+            <input id="cntMasyarakat" class="input" type="number" min="1" max="120" value="20">
+            <input id="cntPemerintah" class="input" type="number" min="0" max="60" value="6">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="applyCounts" class="ghost">Apply</button>
+            <button id="randBtn" class="ghost">Random</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><strong>Dashboard Kesejahteraan & Pendidikan</strong><div class="muted">Rata-rata per komponen</div></div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="chart-box" style="margin-top:10px"><canvas id="chartWelfare"></canvas></div>
+      </div>
+
+      <div class="panel">
+        <div style="font-weight:700">Komponen & Statistik</div>
+        <div class="muted">Klik node pada kanvas untuk detail</div>
+        <div id="stats" style="margin-top:8px"></div>
+      </div>
+
+      <div class="panel">
+        <div style="font-weight:700">Analisis & Tujuan Pembelajaran</div>
+        <div class="muted" style="margin-top:8px">Siswa menganalisis interaksi: Ayah/Ibu/Anak/Guru/OSIS/Pedagang/Polisi/Lembaga Sosial saling mempengaruhi.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">Copyright © BM 2025 <code>https://github.com/bocahmluis</code></div>
+</div>
+
+<script>
+// Fixes applied: cleaned template literals & ensured braces/commas balanced.
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){
+  const DPR = window.devicePixelRatio || 1;
+  canvas.width = canvas.clientWidth * DPR;
+  canvas.height = canvas.clientHeight * DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const components = {
+  keluarga: {id:'keluarga', name:'Keluarga', x:120, y:260, color:'#60a5fa'},
+  sekolah: {id:'sekolah', name:'Sekolah', x:360, y:120, color:'#f472b6'},
+  masyarakat: {id:'masyarakat', name:'Masyarakat', x:360, y:380, color:'#f59e0b'},
+  pemerintah: {id:'pemerintah', name:'Pemerintah', x:620, y:240, color:'#34d399'}
+};
+
+const roleDefs = {
+  Ayah: {component:'keluarga', activity:'pergi ke kantor', effect:{kesejahteraan:6}},
+  Ibu: {component:'keluarga', activity:'memasak', effect:{kesejahteraan:4}},
+  Anak: {component:'keluarga', activity:'belajar ujian', effect:{pendidikan:6}},
+  Guru: {component:'sekolah', activity:'mengajar', effect:{pendidikan:7}},
+  Siswa: {component:'sekolah', activity:'belajar', effect:{pendidikan:5}},
+  KepalaSekolah: {component:'sekolah', activity:'memantau', effect:{stabilitas:4}},
+  OSIS: {component:'sekolah', activity:'mengorganisir acara', effect:{stabilitas:5}},
+  Tetangga: {component:'masyarakat', activity:'bersosialisasi', effect:{stabilitas:3}},
+  Pedagang: {component:'masyarakat', activity:'berjualan', effect:{kesejahteraan:6}},
+  Polisi: {component:'masyarakat', activity:'menjaga keamanan', effect:{stabilitas:6}},
+  LembagaSosial: {component:'masyarakat', activity:'membantu warga', effect:{kesejahteraan:8}}
+};
+
+let agents = [];
+let compAgents = {keluarga:[], sekolah:[], masyarakat:[], pemerintah:[]};
+let tick = 0;
+let simInterval = null;
+let renderRAF = null;
+
+// UI refs
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+const influence = document.getElementById('influence');
+const influenceVal = document.getElementById('influenceVal');
+const intervalRange = document.getElementById('intervalRange');
+const intervalVal = document.getElementById('intervalVal');
+const logBox = document.getElementById('log');
+const tickEl = document.getElementById('tick');
+const cntKeluarga = document.getElementById('cntKeluarga');
+const cntSekolah = document.getElementById('cntSekolah');
+const cntMasyarakat = document.getElementById('cntMasyarakat');
+const cntPemerintah = document.getElementById('cntPemerintah');
+const applyCounts = document.getElementById('applyCounts');
+const randBtn = document.getElementById('randBtn');
+const statsDiv = document.getElementById('stats');
+
+influence.addEventListener('input', function(){ influenceVal.textContent = parseFloat(influence.value).toFixed(2) + 'x'; });
+intervalRange.addEventListener('input', function(){ intervalVal.textContent = intervalRange.value + 'ms'; if(simInterval) restartInteractionLoop(); });
+
+// Chart
+const chartCtx = document.getElementById('chartWelfare').getContext('2d');
+const labels = [];
+const datasets = Object.values(components).map(function(c){ return { label: c.name, data: [], borderColor: c.color, backgroundColor: c.color, fill:false, tension:0.2, pointRadius:2 }; });
+const welfareChart = new Chart(chartCtx, {
+  type: 'line',
+  data: { labels: labels, datasets: datasets },
+  options: {
+    plugins: { legend: { labels: { color: '#dfeffb' } } },
+    scales: { x: { ticks: { color: '#9fbcd8' } }, y: { min:0, max:120, ticks: { color: '#9fbcd8' } } }
+  }
+});
+
+// Legend
+const legendDiv = document.getElementById('legend');
+Object.values(components).forEach(function(c){
+  const el = document.createElement('div'); el.className = 'item';
+  el.innerHTML = '<div class="swatch" style="background:' + c.color + '"></div><div class="muted">' + c.name + '</div>';
+  legendDiv.appendChild(el);
+});
+
+class Agent {
+  constructor(id, role){
+    this.id = id; this.role = role; const def = roleDefs[role]; this.comp = def.component;
+    const base = components[this.comp]; const jitter = 30 + Math.random()*60;
+    this.x = base.x + (Math.random()*jitter - jitter/2);
+    this.y = base.y + (Math.random()*jitter - jitter/2);
+    this.vx = (Math.random()*1.2 - 0.6); this.vy = (Math.random()*1.2 - 0.6);
+    this.kesejahteraan = 30 + Math.random()*50;
+    this.pendidikan = 20 + Math.random()*60;
+    this.stabilitas = 30 + Math.random()*50;
+    this.usia = 10 + Math.random()*60;
+    this.color = components[this.comp].color;
+  }
+  step(dt){
+    const c = components[this.comp];
+    const ax = (c.x - this.x) * 0.002; const ay = (c.y - this.y) * 0.002;
+    this.vx += ax; this.vy += ay; this.vx *= 0.98; this.vy *= 0.98;
+    this.vx += (Math.random()*0.6 - 0.3)*0.02; this.vy += (Math.random()*0.6 - 0.3)*0.02;
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    this.x = Math.max(6, Math.min(canvas.clientWidth - 6, this.x));
+    this.y = Math.max(6, Math.min(canvas.clientHeight - 6, this.y));
+  }
+  draw(ctx){ ctx.beginPath(); ctx.arc(this.x, this.y, 3.2, 0, Math.PI*2); ctx.fillStyle = this.color; ctx.fill(); }
+}
+
+function clearLog(){ logBox.innerHTML = ''; }
+function pushLog(txt){ const p = document.createElement('div'); p.textContent = txt; logBox.prepend(p); if(logBox.childElementCount > 300) logBox.removeChild(logBox.lastChild); }
+
+function spawnByCounts(){
+  agents = []; compAgents = {keluarga:[], sekolah:[], masyarakat:[], pemerintah:[]};
+  let id = 0;
+  const counts = {
+    keluarga: parseInt(cntKeluarga.value) || 10,
+    sekolah: parseInt(cntSekolah.value) || 10,
+    masyarakat: parseInt(cntMasyarakat.value) || 10,
+    pemerintah: parseInt(cntPemerintah.value) || 0
+  };
+  function addRole(role, n){ for(let i=0;i<n;i++){ const a = new Agent('a' + (id++), role); agents.push(a); compAgents[a.comp].push(a); } }
+  const k = counts.keluarga;
+  addRole('Ayah', Math.max(1, Math.round(k*0.15)));
+  addRole('Ibu', Math.max(1, Math.round(k*0.15)));
+  addRole('Anak', Math.max(1, k - Math.max(1, Math.round(k*0.15))*2));
+  const s = counts.sekolah;
+  addRole('Guru', Math.max(1, Math.round(s*0.25)));
+  addRole('Siswa', Math.max(1, Math.round(s*0.6)));
+  addRole('KepalaSekolah', Math.max(0, Math.round(s*0.05)));
+  addRole('OSIS', Math.max(0, Math.round(s*0.1)));
+  const m = counts.masyarakat;
+  addRole('Tetangga', Math.max(1, Math.round(m*0.4)));
+  addRole('Pedagang', Math.max(1, Math.round(m*0.25)));
+  addRole('Polisi', Math.max(0, Math.round(m*0.15)));
+  addRole('LembagaSosial', Math.max(0, Math.round(m*0.2)));
+  const p = counts.pemerintah;
+  for(let i=0;i<p;i++){ const a = new Agent('a' + (id++), 'Ayah'); a.comp = 'pemerintah'; a.color = components.pemerintah.color; agents.push(a); compAgents.pemerintah.push(a); }
+}
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+function performActivity(agent){
+  const def = roleDefs[agent.role]; if(!def) return;
+  const mult = parseFloat(influence.value) || 1;
+  const compId = def.component;
+  const crossMap = {
+    keluarga: ['sekolah','masyarakat'],
+    sekolah: ['keluarga','masyarakat'],
+    masyarakat: ['keluarga','sekolah'],
+    pemerintah: ['keluarga','sekolah','masyarakat']
+  };
+  Object.entries(def.effect).forEach(function(pair){
+    const k = pair[0], v = pair[1];
+    const pool = compAgents[compId];
+    if(pool && pool.length){
+      const sample = pool[Math.floor(Math.random()*pool.length)];
+      const delta = v * (0.6 + Math.random()*0.8) * mult;
+      if(k === 'kesejahteraan') sample.kesejahteraan = clamp(sample.kesejahteraan + delta, 0, 150);
+      if(k === 'pendidikan') sample.pendidikan = clamp(sample.pendidikan + delta, 0, 150);
+      if(k === 'stabilitas') sample.stabilitas = clamp(sample.stabilitas + delta, 0, 150);
+    }
+    const others = crossMap[compId];
+    if(others && Math.random() < 0.45){
+      const targetComp = others[Math.floor(Math.random()*others.length)];
+      const pool2 = compAgents[targetComp];
+      if(pool2 && pool2.length){
+        const s2 = pool2[Math.floor(Math.random()*pool2.length)];
+        const delta2 = v * (0.15 + Math.random()*0.5) * mult;
+        if(k === 'kesejahteraan') s2.kesejahteraan = clamp(s2.kesejahteraan + delta2, 0, 150);
+        if(k === 'pendidikan') s2.pendidikan = clamp(s2.pendidikan + delta2, 0, 150);
+        if(k === 'stabilitas') s2.stabilitas = clamp(s2.stabilitas + delta2, 0, 150);
+      }
+    }
+  });
+  const msg = agent.role + ' (' + components[agent.comp].name + ') — ' + def.activity;
+  pushLog(msg);
+}
+
+function startInteractionLoop(){ stopInteractionLoop(); const ms = parseInt(intervalRange.value) || 800; simInterval = setInterval(function(){
+  const rounds = Math.max(1, Math.round(agents.length/20));
+  for(let i=0;i<rounds;i++){ const a = agents[Math.floor(Math.random()*agents.length)]; if(a) performActivity(a); }
+  tick++; tickEl.textContent = tick; recordAverages();
+}, ms); }
+function stopInteractionLoop(){ if(simInterval) clearInterval(simInterval); simInterval = null; }
+function restartInteractionLoop(){ if(simInterval) startInteractionLoop(); }
+
+function render(){ ctx.clearRect(0,0,canvas.clientWidth, canvas.clientHeight);
+  ctx.globalAlpha = 0.12; ctx.lineWidth = 2; ctx.strokeStyle = '#88b7c8';
+  const comps = Object.values(components);
+  for(let i=0;i<comps.length;i++){ for(let j=i+1;j<comps.length;j++){ ctx.beginPath(); ctx.moveTo(comps[i].x, comps[i].y); ctx.lineTo(comps[j].x, comps[j].y); ctx.stroke(); } }
+  ctx.globalAlpha = 1;
+  comps.forEach(function(c){ ctx.beginPath(); ctx.arc(c.x, c.y, 46, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = c.color; ctx.stroke(); ctx.fillStyle = '#dff5ff'; ctx.font = '13px Inter, Arial'; ctx.textAlign = 'center'; ctx.fillText(c.name, c.x, c.y - 36); });
+  agents.forEach(function(a){ a.step(1); a.draw(ctx); });
+  renderRAF = requestAnimationFrame(render);
+}
+
+function proximityStep(){ for(let i=0;i<agents.length;i++){ const a = agents[i]; for(let j=i+1;j<agents.length;j++){ const b = agents[j]; const dx = a.x - b.x; const dy = a.y - b.y; const d = Math.sqrt(dx*dx + dy*dy); if(d < 6){ const push = 0.02; a.vx += dx*push; a.vy += dy*push; b.vx -= dx*push; b.vy -= dy*push; } } } }
+
+let stepping = false;
+function stepLoop(){ proximityStep(); if(stepping) setTimeout(stepLoop, 40); }
+
+function recordAverages(){ const label = String(tick); labels.push(label); if(labels.length > 40) labels.shift(); const comps = Object.values(components); comps.forEach(function(c, idx){ const pool = compAgents[c.id] || []; const avgW = pool.length ? pool.reduce(function(s,a){ return s + a.kesejahteraan; }, 0) / pool.length : 0; datasets[idx].data.push(Math.round(avgW*10)/10); if(datasets[idx].data.length > 40) datasets[idx].data.shift(); }); welfareChart.update(); updateStats(); }
+
+function updateStats(){ statsDiv.innerHTML = ''; Object.values(components).forEach(function(c){ const pool = compAgents[c.id] || []; const avgK = pool.length ? Math.round(pool.reduce(function(s,a){ return s + a.kesejahteraan; },0) / pool.length) : 0; const avgP = pool.length ? Math.round(pool.reduce(function(s,a){ return s + a.pendidikan; },0) / pool.length) : 0; const el = document.createElement('div'); el.style.marginBottom = '8px'; el.innerHTML = '<div style="display:flex;justify-content:space-between"><div style="font-weight:700;color:' + c.color + '">' + c.name + '</div><div>' + pool.length + ' orang</div></div><div class="muted">Avg Kesejahteraan: <strong style="color:#dff5ff">' + avgK + '</strong> — Avg Pendidikan: <strong style="color:#dff5ff">' + avgP + '</strong></div>'; statsDiv.appendChild(el); }); }
+
+canvas.addEventListener('click', function(ev){ const rect = canvas.getBoundingClientRect(); const x = ev.clientX - rect.left; const y = ev.clientY - rect.top; for(const c of Object.values(components)){ const dx = x - c.x; const dy = y - c.y; if(Math.sqrt(dx*dx + dy*dy) < 60){ const pool = compAgents[c.id] || []; const top = pool.slice().sort(function(a,b){ return b.kesejahteraan - a.kesejahteraan; }).slice(0,5); var html = '<div style="margin-bottom:6px"><strong style="color:' + c.color + '">' + c.name + ' — Detail</strong></div>'; html += '<div class="muted">Jumlah agent: ' + pool.length + '</div>'; html += '<div style="margin-top:6px"><div class="muted">Top 5 (kesejahteraan)</div>'; top.forEach(function(t){ html += '<div style="display:flex;justify-content:space-between"><div>' + t.role + '</div><div>' + Math.round(t.kesejahteraan) + '</div></div>'; }); html += '</div>'; statsDiv.innerHTML = html; return; } } });
+
+startBtn.addEventListener('click', function(){ if(!stepping){ stepping = true; stepLoop(); render(); } startInteractionLoop(); startBtn.disabled = true; pauseBtn.textContent = 'Pause'; });
+pauseBtn.addEventListener('click', function(){ if(simInterval){ stopInteractionLoop(); pauseBtn.textContent = 'Resume'; } else { startInteractionLoop(); pauseBtn.textContent = 'Pause'; } });
+resetBtn.addEventListener('click', function(){ stop(); boot(); startBtn.disabled = false; });
+applyCounts.addEventListener('click', function(){ spawnByCounts(); clearLog(); tick = 0; labels.length = 0; datasets.forEach(function(d){ d.data.length = 0; }); welfareChart.update(); updateStats(); });
+randBtn.addEventListener('click', function(){ agents.forEach(function(a){ a.kesejahteraan = 30 + Math.random()*60; a.pendidikan = 20 + Math.random()*60; a.stabilitas = 20 + Math.random()*60; }); updateStats(); pushLog('Randomize atribut agent'); });
+
+function stop(){ stopInteractionLoop(); stepping = false; if(renderRAF) cancelAnimationFrame(renderRAF); }
+
+function boot(){ tick = 0; clearLog(); spawnByCounts(); labels.length = 0; datasets.forEach(function(d){ d.data.length = 0; }); welfareChart.update(); updateStats(); render(); }
+
+boot();
+</script>
+</body>
+</html>
